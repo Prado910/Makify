@@ -8,35 +8,37 @@ class Spotify(spotipy.Spotify):
     def __init__(self, auth=None, oauth_manager=None, auth_manager=None):
         super().__init__(auth, oauth_manager, auth_manager)
 
-    def clone_playlist(self, playlist: dict, user_id: str) -> dict:
-        """Creates a new playlist equal to the original playlist.
+    def clone_playlist_details(self, playlist_id: str, user_id: str) -> dict:
+        """Create a new playlist equal to the original playlist.
 
         Args:
-            playlist (dict): The original playlist.
+            playlist (str): The original playlist id.
             user_id (str): The id of the user.
 
         Returns:
             dict: The new playlist.
         """
+        playlist = self.playlist(playlist_id)
         name = playlist["name"] + " (Makify)"
         new_playlist = self.user_playlist_create(
             user_id, name, playlist["public"], playlist["description"]
         )
 
         img = requests.get(playlist["images"][0]["url"]).content
-        self.change_playlist_image(new_playlist, img)
+
+        self.change_playlist_image(new_playlist["id"], img)
 
         return new_playlist
 
-    def change_playlist_image(self, playlist: dict, img: bytes):
-        """Changes the cover image of a playlist.
+    def change_playlist_image(self, playlist_id: str, img: bytes):
+        """Change the cover image of a playlist.
 
         Args:
-            playlist (dict): The playlist dict.
+            playlist_id (str): The id of the playlist.
             img (bytes):  The image bytes to set as the cover image.
         """
         img_b64 = base64.b64encode(img).decode("utf-8")
-        self.playlist_upload_cover_image(playlist["id"], img_b64)
+        self.playlist_upload_cover_image(playlist_id, img_b64)
 
     def get_playlist_tracks(self, playlist_id: str) -> list:
         """Get a list of all tracks in a playlist.
@@ -64,26 +66,45 @@ class Spotify(spotipy.Spotify):
 
         return tracks
 
-    def sort_tracks(self, tracks: list) -> list:
+    def sort_tracks(self, tracks: list, sort_by: str) -> list:
         """Sort a list of tracks.
 
         Args:
             tracks (list): A list of tracks to sort.
+            sort_by (str): A comma-separated string of keys to sort the tracks by, in order of priority. Valid keys are:
+                           "name", "artist", "album_name", "release_date", "track_number".
 
         Returns:
             list: The sorted list of tracks.
         """
+        key_funcs = list()
+        for key in sort_by.replace(" ", "").split(","):
+            if key == "name":
+                key_funcs.append(lambda x: x["name"])
+            elif key == "artist":
+                key_funcs.append(lambda x: x["artists"][0]["name"])
+            elif key == "album_name":
+                key_funcs.append(lambda x: x["album"]["name"])
+            elif key == "release_date":
+                key_funcs.append(lambda x: x["album"]["release_date"])
+            elif key == "track_number":
+                key_funcs.append(lambda x: (x["disc_number"], x["track_number"]))
+
         sorted_tracks = sorted(
-            tracks,
-            key=lambda x: (
-                x["artists"][0]["name"],
-                x["album"]["release_date"],
-                x["album"]["name"],
-                x["disc_number"],
-                x["track_number"],
-            ),
+            tracks, key=lambda x: tuple(key_func(x) for key_func in key_funcs)
         )
         return sorted_tracks
+
+    def get_track_ids(self, tracks: list) -> list:
+        """Get a list of Spotify IDs for a list of tracks.
+
+        Args:
+            tracks (list): A list of tracks.
+
+        Returns:
+            list: A list of Spotify IDs.
+        """
+        return [track["id"] for track in tracks]
 
     def get_track_uris(self, tracks: list) -> list:
         """Get a list of Spotify URIs for a list of tracks.
@@ -100,7 +121,7 @@ class Spotify(spotipy.Spotify):
         """Add a list of track URIs to a playlist.
 
         Args:
-            playlist_id (str): The id of the playlist
+            playlist_id (str): The id of the playlist.
             uris (list): A list of track URIs.
         """
         while True:
@@ -110,3 +131,18 @@ class Spotify(spotipy.Spotify):
             else:
                 self.playlist_add_items(playlist_id, uris)
                 break
+
+    def sort_playlist(self, playlist_id: str, sort_by: str):
+        """Sort the tracks of a playlist.
+
+        Args:
+            playlist_id (str): The id of the playlist.
+            sort_by (str): A comma-separated string of keys to sort the tracks by, in order of priority. Valid keys are:
+                           "name", "artist", "album_name", "release_date", "track_number".
+        """
+
+        tracks = self.get_playlist_tracks(playlist_id)
+        sorted_tracks = self.sort_tracks(tracks, sort_by)
+        track_ids = self.get_track_ids(sorted_tracks)
+
+        self.playlist_replace_items(playlist_id, track_ids)

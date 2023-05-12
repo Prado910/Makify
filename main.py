@@ -9,21 +9,13 @@ SCOPE = "playlist-modify-public playlist-modify-private ugc-image-upload"
 
 
 def main():
-    user_id = input("Enter your user ID: ")
-    playlist_id = input("Enter the playlist ID: ")
-
     auth_manager = SpotifyPKCE(CLIENT_ID, REDIRECT_URI, scope=SCOPE)
     spotify = Spotify(auth_manager=auth_manager)
+    
+    user_id = spotify.current_user()["id"]
+    playlist_id = input("Enter the playlist ID: ")
 
-    playlist = spotify.playlist(playlist_id)
-    new_playlist = spotify.clone_playlist(playlist, user_id)
-
-    tracks = spotify.get_playlist_tracks(playlist_id)
-    sorted_tracks = spotify.sort_tracks(tracks)
-    track_uris = spotify.get_track_uris(sorted_tracks)
-
-    spotify.add_tracks_to_playlist(new_playlist["id"], track_uris)
-
+    spotify.sort_playlist(playlist_id, "name")
 
 if __name__ == "__main__":
     main()
