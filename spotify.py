@@ -118,7 +118,7 @@ class Spotify(spotipy.Spotify):
         return [track["uri"] for track in tracks]
 
     def add_tracks_to_playlist(self, playlist_id: str, uris: list):
-        """Add a list of track URIs to a playlist.
+        """Add a list of tracks to a playlist.
 
         Args:
             playlist_id (str): The id of the playlist.
@@ -130,6 +130,21 @@ class Spotify(spotipy.Spotify):
                 uris = uris[100:]
             else:
                 self.playlist_add_items(playlist_id, uris)
+                break
+
+    def remove_playlist_tracks(self, playlist_id: str, ids: list):
+        """Remove a list of tracks from a playlist.
+
+        Args:
+            playlist_id (str): The id of the playlist.
+            ids (list): A list of track IDs.
+        """
+        while True:
+            if len(ids) > 100:
+                self.playlist_remove_all_occurrences_of_items(playlist_id, ids[:100])
+                ids = ids[100:]
+            else:
+                self.playlist_remove_all_occurrences_of_items(playlist_id, ids)
                 break
 
     def sort_playlist(self, playlist_id: str, sort_by: str):
@@ -144,5 +159,7 @@ class Spotify(spotipy.Spotify):
         tracks = self.get_playlist_tracks(playlist_id)
         sorted_tracks = self.sort_tracks(tracks, sort_by)
         track_ids = self.get_track_ids(sorted_tracks)
+        track_uris = self.get_track_uris(sorted_tracks)
 
-        self.playlist_replace_items(playlist_id, track_ids)
+        self.remove_playlist_tracks(playlist_id, track_ids)
+        self.add_tracks_to_playlist(playlist_id, track_uris)
