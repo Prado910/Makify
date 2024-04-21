@@ -3,12 +3,11 @@ import base64
 import requests
 import spotipy
 
-
 class Spotify(spotipy.Spotify):
     def __init__(self, auth=None, oauth_manager=None, auth_manager=None):
         super().__init__(auth, oauth_manager, auth_manager)
 
-    def clone_playlist_details(self, playlist_id: str, user_id: str) -> dict:
+    def clone_playlist(self, playlist_id: str, user_id: str) -> dict:
         """Create a new playlist equal to the original playlist.
 
         Args:
@@ -19,13 +18,18 @@ class Spotify(spotipy.Spotify):
             dict: The new playlist.
         """
         playlist = self.playlist(playlist_id)
-        name = playlist["name"] + " (Makify)"
+        tracks = self.get_playlist_tracks(playlist_id)
+        uris = self.get_track_uris(tracks)
+        
+        name = playlist["name"] + " (cloned by Makify)"
+        
         new_playlist = self.user_playlist_create(
             user_id, name, playlist["public"], playlist["description"]
         )
-
+        
+        self.add_tracks_to_playlist(new_playlist["id"], uris)
+        
         img = requests.get(playlist["images"][0]["url"]).content
-
         self.change_playlist_image(new_playlist["id"], img)
 
         return new_playlist
@@ -49,7 +53,7 @@ class Spotify(spotipy.Spotify):
         Returns:
             list: A list of all tracks in the playlist.
         """
-        playlist_tracks = self.playlist_tracks(playlist_id)
+        playlist_tracks = self.playlist_tracks(playlist_id)  # Get first 100 playlist tracks
         tracks = list()
 
         while True:
@@ -57,7 +61,7 @@ class Spotify(spotipy.Spotify):
                 tracks.append(item["track"])
 
             if playlist_tracks["next"]:
-                playlist_tracks = self.next(playlist_tracks)
+                playlist_tracks = self.next(playlist_tracks)  # Next 100 tracks
             else:
                 break
 
@@ -82,7 +86,7 @@ class Spotify(spotipy.Spotify):
             if key == "name":
                 key_funcs.append(lambda x: x["name"])
             elif key == "artist":
-                key_funcs.append(lambda x: x["artists"][0]["name"])
+                key_funcs.append(lambda x: x["album"]["artists"][0]["name"])
             elif key == "album_name":
                 key_funcs.append(lambda x: x["album"]["name"])
             elif key == "release_date":
@@ -96,25 +100,9 @@ class Spotify(spotipy.Spotify):
         return sorted_tracks
 
     def get_track_ids(self, tracks: list) -> list:
-        """Get a list of Spotify IDs for a list of tracks.
-
-        Args:
-            tracks (list): A list of tracks.
-
-        Returns:
-            list: A list of Spotify IDs.
-        """
         return [track["id"] for track in tracks]
 
     def get_track_uris(self, tracks: list) -> list:
-        """Get a list of Spotify URIs for a list of tracks.
-
-        Args:
-            tracks (list): A list of tracks.
-
-        Returns:
-            list: A list of Spotify URIs.
-        """
         return [track["uri"] for track in tracks]
 
     def add_tracks_to_playlist(self, playlist_id: str, uris: list):
